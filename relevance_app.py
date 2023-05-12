@@ -67,9 +67,9 @@ stopwords = ["a", "as", "able", "about", "above", "according", "accordingly",
 	     "yourselves", "zero"]
 		 
 
-#geeting the document ids for the terms
+
 def get_docids_for_terms(terms):
-    table=boto3.resource("dynamodb").Table("tfidf-5330")
+    table=boto3.resource("dynamodb").Table("tfidf-lab6-5330")
     docids = []
     if terms is not None:
         for term in terms:
@@ -80,14 +80,13 @@ def get_docids_for_terms(terms):
             response =table.query(**query_params)
             res=response['Items']
             docids.append(res)
-    # dictiopnary is return, we need only document ids 
     d=list(itertools.chain.from_iterable(docids))
     dids=d1=[d[i]['docid'] for i in range(len(d))]
    
     return dids
-#computing the relevant for given document id and terms    
+    
 def compute_doc_relevance(docid, terms):
-    table=boto3.resource("dynamodb").Table("tfidf-5330")
+    table=boto3.resource("dynamodb").Table("tfidf-lab6-5330")
     total = 0.0
     compute_rel=0.0
     if docid is not None and terms is not None:
@@ -98,17 +97,16 @@ def compute_doc_relevance(docid, terms):
                 'ProjectionExpression':'tfidf' }
             response= table.query(**query_params)
             res= response['Items']
-            # extracting only the terms from list of dictioonaries
             if len(res)>0:
                 res1=float(res[0]['tfidf'])
             else:
                 res1=0.0
 
             total = total+res1
-        compute_rel = total/len(terms) 
+        compute_rel = total/len(set(terms)) 
     
-    return compute_rel
-# extractin gthe documenmt title for given documemnt id    
+    return int(compute_rel)
+    
 def doc_title(docid):
     table=boto3.resource("dynamodb").Table("doctitle-lab6")
     title=None
@@ -123,7 +121,7 @@ def doc_title(docid):
     else:
         res1=""
     return res1
-# extrqcting the relevant terms.    
+    
 def termify(line):
     terms = []
     words = re.findall(r'[^\W_]+', line)
@@ -132,19 +130,20 @@ def termify(line):
         if (len(lowered) > 1) and (lowered not in stopwords) and (not re.search(r'^\d*$', lowered)):
             terms.append(lowered)
     return terms
-#returning only the top five higfhest relevant document
+
 def sort_and_limit(docid_relevance):
     docid_relevance=set(docid_relevance)
     sorted_docid=sorted(docid_relevance,key=lambda x: x[2], reverse=True)[:5]
    
     return sorted_docid
-#main fucntion called by lambda fuction
+
 def search(line):
     terms=termify(line)
+    terms=set(terms)
     docids=get_docids_for_terms(terms)
     result=(sort_and_limit([(docid,doc_title(docid), compute_doc_relevance(docid, terms)) for docid in docids]))
     return result
-#formattin gthe result
+
 def formatResult(line,items):
     html="<html><body>"
     html+= f"<h3>Relevant documents for: {line}:</h3> \n"
@@ -153,7 +152,7 @@ def formatResult(line,items):
         html+= f"<li> {item[1]} -- {item[2]}</li>"
     html+= "</ol></body></html>"
     return {'statusCode':200,'headers':{'Content-Type':'text/html'},'body':html}
-#lambda handler   
+    
 def lambda_handler(event, context):
     line=event['queryStringParameters']['line']
     items=search(line)
